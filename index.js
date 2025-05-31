@@ -30,7 +30,7 @@ async function run() {
         const userCollection = client.db('teachDB').collection('users');
         const teacherCollection = client.db('teachDB').collection('requests');
         const classCollection = client.db('teachDB').collection('classes');
-        // const reviewCollection = client.db('teachDB').collection('reviews');
+        const enrollCollection = client.db('teachDB').collection('enrolls');
 
 
         // jwt api's
@@ -123,7 +123,6 @@ async function run() {
             res.send(result);
         });
 
-        //  admin to get all requests
         app.get('/teacher-requests', verifyToken, async (req, res) => {
             const result = await teacherCollection.find().toArray();
             res.send(result);
@@ -166,7 +165,7 @@ async function run() {
         // class related api's
         app.get('/classes/:email', verifyToken, async (req, res) => {
             const email = req.params.email;
-            const result = await classCollection.findOne({ email });
+            const result = await classCollection.find({ email }).toArray();
             res.send(result);
         });
 
@@ -224,43 +223,34 @@ async function run() {
 
 
 
-        // // review related api's
-        // app.get('/reviews', async (req, res) => {
-        //     const email = req.query.email;
-        //     const query = email ? { userEmail: email } : {};
-        //     const result = await reviewCollection.find(query).toArray();
-        //     res.send(result);
-        // })
+        //  enroll related api's
+        app.get('/enroll/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const result = await enrollCollection.find({ email }).toArray();
+            res.send(result);
+        });
 
-        // app.post('/reviews', async (req, res) => {
-        //     const item = req.body;
-        //     const result = await reviewCollection.insertOne(item);
-        //     res.send(result);
-        // });
+        app.post('/enroll', verifyToken, async (req, res) => {
+            const enrollment = req.body;
 
-        // app.patch('/reviews/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const reviewData = req.body;
-        //     const filter = { _id: new ObjectId(id) };
-        //     const updateReview = {
-        //         $set: {
-        //             rating: reviewData.rating,
-        //             comment: reviewData.comment,
-        //             date: reviewData.date
-        //         }
-        //     };
+            const existing = await enrollCollection.findOne({
+                classId: enrollment.classId,
+                email: enrollment.email
+            });
 
-        //     const result = await reviewCollection.updateOne(filter, updateReview);
-        //     res.send(result);
-        // });
+            if (existing) {
+                return res.status(400).send({ message: 'Already enrolled in this class' });
+            }
 
+            const result = await enrollCollection.insertOne(enrollment);
 
-        // app.delete('/reviews/:id', async (req, res) => {
-        //     const reviewId = req.params.id;
-        //     const query = { _id: new ObjectId(reviewId) };
-        //     const result = await reviewCollection.deleteOne(query);
-        //     res.send(result);
-        // });
+            await classCollection.updateOne(
+                { _id: new ObjectId(enrollment.classId) },
+                { $inc: { enrollment: 1 } }
+            );
+
+            res.send(result);
+        });
 
 
         // Send a ping to confirm a successful connection
