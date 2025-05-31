@@ -29,7 +29,7 @@ async function run() {
 
         const userCollection = client.db('teachDB').collection('users');
         const teacherCollection = client.db('teachDB').collection('requests');
-        // const appliedCollection = client.db('teachDB').collection('applied');
+        const classCollection = client.db('teachDB').collection('classes');
         // const reviewCollection = client.db('teachDB').collection('reviews');
 
 
@@ -141,7 +141,6 @@ async function run() {
             res.send(result);
         });
 
-        // Approve a teacher request
         app.patch('/teacher-requests/approve/:id', async (req, res) => {
             const id = req.params.id;
             const result = await teacherCollection.updateOne(
@@ -155,7 +154,6 @@ async function run() {
             res.send(result);
         });
 
-        // Reject a teacher request
         app.patch('/teacher-requests/reject/:id', async (req, res) => {
             const id = req.params.id;
             const result = await teacherCollection.updateOne(
@@ -165,33 +163,65 @@ async function run() {
             res.send(result);
         })
 
-        // app.delete('/scholar/:id', verifyToken, async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { _id: new ObjectId(id) };
-        //     const result = await scholarCollection.deleteOne(query);
-        //     res.send(result);
-        // });
+        // class related api's
+        app.get('/classes/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const result = await classCollection.findOne({ email });
+            res.send(result);
+        });
 
-        // // applied related api's
-        // app.get('/scholarApplied', async (req, res) => {
-        //     const email = req.query.email;
-        //     const query = { userEmail: email };
-        //     const result = await appliedCollection.find(query).toArray();
-        //     res.send(result);
-        // });
+        app.get('/classes', async (req, res) => {
+            const result = await classCollection.find().toArray();
+            res.send(result);
+        });
 
-        // app.post('/scholarApplied', verifyToken, async (req, res) => {
-        //     const item = req.body;
-        //     const result = await appliedCollection.insertOne(item);
-        //     res.send(result);
-        // });
+        app.post('/classes', verifyToken, async (req, res) => {
+            const newClass = req.body;
+            const result = await classCollection.insertOne(newClass);
+            res.send(result);
+        });
 
-        // app.delete('/scholarApplied/:id', verifyToken, async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { _id: new ObjectId(id) };
-        //     const result = await appliedCollection.deleteOne(query);
-        //     res.send(result);
-        // });
+        app.patch('/classes/approve/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = { $set: { status: 'accepted' } };
+            const result = await classCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        });
+
+        app.patch('/classes/reject/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = { $set: { status: 'rejected' } };
+            const result = await classCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        });
+
+        app.patch('/classes/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const updated = req.body;
+
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    title: updated.title,
+                    price: updated.price,
+                    description: updated.description,
+                    image: updated.image
+                }
+            };
+
+            const result = await classCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        });
+
+        app.delete('/classes/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await classCollection.deleteOne(query);
+            res.send(result);
+        });
+
 
 
         // // review related api's
