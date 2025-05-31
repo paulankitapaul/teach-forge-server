@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-// const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 const app = express();
@@ -28,43 +28,43 @@ async function run() {
         await client.connect();
 
         const userCollection = client.db('teachDB').collection('users');
-        // const scholarCollection = client.db('teachDB').collection('scholars');
+        const teacherCollection = client.db('teachDB').collection('requests');
         // const appliedCollection = client.db('teachDB').collection('applied');
         // const reviewCollection = client.db('teachDB').collection('reviews');
 
 
         // jwt api's
-        // app.post('/jwt', async (req, res) => {
-        //     const user = req.body;
-        //     const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '2h' });
-        //     res.send({ token });
-        // });
+        app.post('/jwt', async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '2h' });
+            res.send({ token });
+        });
 
 
         // middlewares
-        // const verifyToken = (req, res, next) => {
-        //     if (!req.headers.authorization) {
-        //         return res.status(401).send({ message: 'unauthorize access' });
-        //     }
+        const verifyToken = (req, res, next) => {
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: 'unauthorize access' });
+            }
 
-        //     const token = req.headers.authorization.split(' ')[1]
-        //     jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
-        //         if (err) {
-        //             return res.status(401).send({ message: 'unauthorize access' });
-        //         }
-        //         req.decoded = decoded;
-        //         next();
-        //     })
-        // };
+            const token = req.headers.authorization.split(' ')[1]
+            jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: 'unauthorize access' });
+                }
+                req.decoded = decoded;
+                next();
+            })
+        };
 
 
         // user api's
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyToken, async (req, res) => {
             const result = await userCollection.find().toArray();
             res.send(result);
         });
 
-        app.get('/users/role/:email', async (req, res) => {
+        app.get('/users/role/:email', verifyToken, async (req, res) => {
             const email = req.params.email;
             if (email !== req.decoded.email) {
                 return res.status(403).send({ message: 'forbidden access' });
@@ -95,7 +95,7 @@ async function run() {
             res.send(result);
         });
 
-        app.patch('/users/role/:id', async (req, res) => {
+        app.patch('/users/role/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const { role } = req.body;
             const filter = { _id: new ObjectId(id) };
@@ -108,7 +108,7 @@ async function run() {
             res.send(result);
         });
 
-        app.delete('/users/:id', async (req, res) => {
+        app.delete('/users/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await userCollection.deleteOne(query);
@@ -116,51 +116,54 @@ async function run() {
         });
 
 
-        // // scholar related api's
-        // app.get('/scholar', async (req, res) => {
-        //     const result = await scholarCollection.find().toArray();
-        //     res.send(result);
-        // });
-        // app.get('/scholar/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { _id: new ObjectId(id) };
-        //     const result = await scholarCollection.findOne(query);
-        //     res.send(result);
-        // });
+        // teacher-request related api's
+        app.get('/teacher-requests/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const result = await teacherCollection.findOne({ email });
+            res.send(result);
+        });
 
-        // app.post('/scholar', verifyToken, async (req, res) => {
-        //     const item = req.body;
-        //     const result = await scholarCollection.insertOne(item);
-        //     res.send(result);
-        // });
+        //  admin to get all requests
+        app.get('/teacher-requests', verifyToken, async (req, res) => {
+            const result = await teacherCollection.find().toArray();
+            res.send(result);
+        });
 
-        // app.patch('/scholar/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const updates = req.body;
+        app.post('/teacher-requests', verifyToken, async (req, res) => {
+            const item = req.body;
+            const existing = await teacherCollection.findOne({ email: item.email });
 
-        //     const filter = { _id: new ObjectId(id) };
-        //     const updateItem = {
-        //         $set: {
-        //             scholarshipName: updates.scholarshipName,
-        //             applicationDeadline: updates.applicationDeadline,
-        //             applicationFees: updates.applicationFees,
-        //             postedEmail: updates.postedEmail,
-        //             scholarshipCategory: updates.scholarshipCategory,
-        //             scholarshipPostDate: updates.scholarshipPostDate,
-        //             serviceCharge: updates.serviceCharge,
-        //             subjectCategory: updates.subjectCategory,
-        //             tuitionFees: updates.tuitionFees,
-        //             universityCity: updates.universityCity,
-        //             universityCountry: updates.universityCountry,
-        //             universityName: updates.universityName,
-        //             universityRank: updates.universityRank
-        //         }
-        //     };
+            if (existing && existing.status !== 'rejected') {
+                return res.status(400).send({ message: "You already submitted a request." });
+            }
 
-        //     const result = await scholarCollection.updateOne(filter, updateItem);
-        //     res.send(result);
-        // });
+            const result = await teacherCollection.insertOne(item);
+            res.send(result);
+        });
 
+        // Approve a teacher request
+        app.patch('/teacher-requests/approve/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await teacherCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: { status: "accepted" } }
+            );
+            await userCollection.updateOne(
+                { email: req.body.email },
+                { $set: { role: "teacher" } }
+            );
+            res.send(result);
+        });
+
+        // Reject a teacher request
+        app.patch('/teacher-requests/reject/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await teacherCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: { status: "rejected" } }
+            );
+            res.send(result);
+        })
 
         // app.delete('/scholar/:id', verifyToken, async (req, res) => {
         //     const id = req.params.id;
